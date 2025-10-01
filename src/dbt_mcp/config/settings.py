@@ -2,6 +2,7 @@ import logging
 import socket
 import time
 from enum import Enum
+from functools import cached_property
 from pathlib import Path
 from typing import Annotated
 
@@ -27,6 +28,8 @@ logger = logging.getLogger(__name__)
 
 OAUTH_REDIRECT_STARTING_PORT = 6785
 DEFAULT_DBT_CLI_TIMEOUT = 60
+
+logger = logging.getLogger(__name__)
 
 
 class AuthenticationMethod(Enum):
@@ -66,11 +69,12 @@ class DbtMcpSettings(BaseSettings):
     # Disable tool settings
     disable_dbt_cli: bool = Field(False, alias="DISABLE_DBT_CLI")
     disable_dbt_codegen: bool = Field(True, alias="DISABLE_DBT_CODEGEN")
-    disable_semantic_layer: bool | None = Field(None, alias="DISABLE_SEMANTIC_LAYER")
-    disable_discovery: bool | None = Field(None, alias="DISABLE_DISCOVERY")
+    disable_semantic_layer: bool = Field(False, alias="DISABLE_SEMANTIC_LAYER")
+    disable_discovery: bool = Field(False, alias="DISABLE_DISCOVERY")
     disable_remote: bool | None = Field(None, alias="DISABLE_REMOTE")
-    disable_admin_api: bool | None = Field(None, alias="DISABLE_ADMIN_API")
+    disable_admin_api: bool = Field(False, alias="DISABLE_ADMIN_API")
     disable_sql: bool | None = Field(None, alias="DISABLE_SQL")
+    disable_dbt_platform: bool | None = Field(None, alias="DISABLE_DBT_PLATFORM")  # admin api, discovery, semantic layer, sql
     disable_tools: Annotated[list[ToolName] | None, NoDecode] = Field(
         None, alias="DISABLE_TOOLS"
     )
@@ -105,23 +109,18 @@ class DbtMcpSettings(BaseSettings):
             return self.disable_remote
         return True
 
-    @property
-    def actual_disable_admin_api(self) -> bool:
-        if self.disable_admin_api is None:
-            return not self._is_valid_dbt_cloud()
-        return self.disable_admin_api
-    
-    @property
-    def actual_disable_discovery(self) -> bool:
-        if self.disable_discovery is None:
-            return not self._is_valid_dbt_cloud()
-        return self.disable_discovery
-
-    @property
-    def actual_disable_semantic_layer(self) -> bool:
-        if self.disable_semantic_layer is None:
-            return not self._is_valid_dbt_cloud()
-        return self.disable_semantic_layer
+    @cached_property  # caching so that it only warns once across multiple calls
+    def actual_disable_dbt_platform(self) -> bool:
+        if self.disable_dbt_platform is not None:
+            return self.disable_dbt_platform
+        errors = validate_dbt_platform_settings_auto_disable(self)
+        if errors:
+            logger.warning(
+                "Disabling dbt platform tools due to configuration errors:\n"
+                + "\n".join(errors)
+            )
+            return True
+        return False
 
 
     @property
@@ -186,12 +185,6 @@ class DbtMcpSettings(BaseSettings):
             raise ValueError("\n".join(errors))
         return tool_names
 
-    def _is_valid_dbt_cloud(self) -> bool:
-        return (
-            self.dbt_host is not None
-            and self.actual_prod_environment_id is not None
-            and self.dbt_token is not None
-        )
 
 def _find_available_port(*, start_port: int, max_attempts: int = 20) -> int:
     """
@@ -275,9 +268,13 @@ def validate_settings(settings: DbtMcpSettings):
         raise ValueError("Errors found in configuration:\n\n" + "\n".join(errors))
 
 
-def validate_dbt_platform_settings(
+def validate_dbt_platform_settings_auto_disable(
     settings: DbtMcpSettings,
 ) -> list[str]:
+    """
+    Validate a subset of `validate_dbt_platform_settings` for
+    errors that would cause dbt platform tools to be disabled automatically.
+    """
     errors: list[str] = []
     if (
         not settings.disable_semantic_layer
@@ -304,6 +301,14 @@ def validate_dbt_platform_settings(
             errors.append(
                 "DBT_HOST must not start with 'metadata' or 'semantic-layer'."
             )
+    return errors
+
+
+def validate_dbt_platform_settings(
+    settings: DbtMcpSettings,
+) -> list[str]:
+    errors: list[str] = []  
+    errors.extend(validate_dbt_platform_settings_auto_disable(settings))
     if (
         not settings.actual_disable_sql
         and ToolName.TEXT_TO_SQL not in (settings.disable_tools or [])

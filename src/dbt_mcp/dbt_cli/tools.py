@@ -119,7 +119,7 @@ def create_dbt_cli_tool_definitions(config: DbtCliConfig) -> list[ToolDefinition
         manifest = _get_manifest()
         return get_child_lineage(manifest, model_id, recursive=recursive)
 
-    def get_lineage(model_id: str, recursive: bool = False) -> str:
+    def get_model_lineage(model_id: str, recursive: bool = False) -> str:
         manifest = _get_manifest()
         return ModelLineage.model_validate(
             {
@@ -248,7 +248,7 @@ def create_dbt_cli_tool_definitions(config: DbtCliConfig) -> list[ToolDefinition
             ),
         ),
         ToolDefinition(
-            fn=get_lineage,
+            fn=get_model_lineage,
             description=get_prompt("dbt_cli/get_lineage"),
             annotations=create_tool_annotations(
                 title="dbt get_lineage",

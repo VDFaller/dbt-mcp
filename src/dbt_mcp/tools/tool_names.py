@@ -18,6 +18,7 @@ class ToolName(Enum):
     RUN = "run"
     TEST = "test"
     SHOW = "show"
+    GET_MODEL_LINEAGE = "get_model_lineage"
 
     # Semantic Layer tools
     LIST_METRICS = "list_metrics"

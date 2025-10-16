@@ -1,7 +1,7 @@
 from typing import Any
 from dbt_mcp.dbt_cli.manifest.lineage_types import Ancestor, Descendant, ModelLineage
 
-
+# TODO: I think these could just be classmethods of the validators
 def get_parent_lineage(
     manifest: dict[str, Any], model_id: str, recursive: bool = False
 ) -> str:

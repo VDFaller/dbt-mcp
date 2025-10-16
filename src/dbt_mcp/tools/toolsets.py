@@ -52,6 +52,7 @@ toolsets = {
         ToolName.RUN,
         ToolName.TEST,
         ToolName.SHOW,
+        ToolName.GET_MODEL_LINEAGE,
     },
     Toolset.ADMIN_API: {
         ToolName.LIST_JOBS,

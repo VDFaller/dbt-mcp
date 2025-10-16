@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 from collections.abc import Iterable, Sequence
@@ -12,6 +13,9 @@ from dbt_mcp.tools.definitions import ToolDefinition
 from dbt_mcp.tools.register import register_tools
 from dbt_mcp.tools.tool_names import ToolName
 from dbt_mcp.tools.annotations import create_tool_annotations
+from dbt_mcp.dbt_cli.manifest.parser import get_parent_lineage, get_child_lineage
+
+from dbt_mcp.dbt_cli.manifest.lineage_types import ModelLineage
 
 
 def create_dbt_cli_tool_definitions(config: DbtCliConfig) -> list[ToolDefinition]:
@@ -104,36 +108,26 @@ def create_dbt_cli_tool_definitions(config: DbtCliConfig) -> list[ToolDefinition
         _run_dbt_command(["parse"])
         cwd_path = config.project_dir if os.path.isabs(config.project_dir) else None
         manifest_path = os.path.join(cwd_path or ".", "target", "manifest.json")
-        with open(manifest_path, "r") as f:
+        with open(manifest_path) as f:
             return json.loads(f.read())
 
-    def get_parent_lineage(model_id: str, recursive: bool = False) -> str:
+    def parent_lineage(model_id: str, recursive: bool = False) -> str:
         manifest = _get_manifest()
-        parent_map = manifest.get("parent_map", {})
-        if not recursive:
-            return json.dumps(parent_map.get(model_id, []))
-        # If recursive is True, we need to get all ancestors
-        ancestors = set()
-        to_process = parent_map.get(model_id, [])
-        while to_process:
-            current = to_process.pop(0)
-            ancestors.add(current)
-            to_process.extend(parent_map.get(current, []))
-        return json.dumps(list(ancestors))
+        return get_parent_lineage(manifest, model_id, recursive=recursive)
 
-    def get_child_lineage(model_id: str, recursive: bool = False) -> str:
+    def child_lineage(model_id: str, recursive: bool = False) -> str:
         manifest = _get_manifest()
-        child_map = manifest.get("child_map", {})
-        if not recursive:
-            return json.dumps(child_map.get(model_id, []))
-        # If recursive is True, we need to get all descendants
-        descendants = set()
-        to_process = child_map.get(model_id, [])
-        while to_process:
-            current = to_process.pop(0)
-            descendants.add(current)
-            to_process.extend(child_map.get(current, []))
-        return json.dumps(list(descendants))
+        return get_child_lineage(manifest, model_id, recursive=recursive)
+
+    def get_lineage(model_id: str, recursive: bool = False) -> str:
+        manifest = _get_manifest()
+        return ModelLineage.model_validate(
+            {
+                "model_id": model_id,
+                "ancestors": parent_lineage(manifest, model_id, recursive=recursive),
+                "descendants": child_lineage(manifest, model_id, recursive=recursive),
+            }
+        ).model_dump_json()
 
     def compile() -> str:
         return _run_dbt_command(["compile"])
@@ -248,6 +242,16 @@ def create_dbt_cli_tool_definitions(config: DbtCliConfig) -> list[ToolDefinition
             description=get_prompt("dbt_cli/list"),
             annotations=create_tool_annotations(
                 title="dbt list",
+                read_only_hint=True,
+                destructive_hint=False,
+                idempotent_hint=True,
+            ),
+        ),
+        ToolDefinition(
+            fn=get_lineage,
+            description=get_prompt("dbt_cli/get_lineage"),
+            annotations=create_tool_annotations(
+                title="dbt get_lineage",
                 read_only_hint=True,
                 destructive_hint=False,
                 idempotent_hint=True,

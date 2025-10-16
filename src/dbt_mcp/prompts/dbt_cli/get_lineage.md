@@ -1,0 +1,2 @@
+The get_lineage command retrieves the lineage information for a specified model in the dbt project, including its parent and child models.
+It can return either direct parents/children or all ancestors/descendants based on the recursive flag.

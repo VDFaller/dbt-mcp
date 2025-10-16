@@ -1,4 +1,5 @@
 import json
+from typing import Any
 import os
 import subprocess
 from collections.abc import Iterable, Sequence
@@ -104,7 +105,7 @@ def create_dbt_cli_tool_definitions(config: DbtCliConfig) -> list[ToolDefinition
             vars=vars,
         )
 
-    def _get_manifest() -> str:
+    def _get_manifest() -> dict[str, Any]:
         _run_dbt_command(["parse"])
         cwd_path = config.project_dir if os.path.isabs(config.project_dir) else None
         manifest_path = os.path.join(cwd_path or ".", "target", "manifest.json")
@@ -120,12 +121,11 @@ def create_dbt_cli_tool_definitions(config: DbtCliConfig) -> list[ToolDefinition
         return get_child_lineage(manifest, model_id, recursive=recursive)
 
     def get_model_lineage(model_id: str, recursive: bool = False) -> str:
-        manifest = _get_manifest()
         return ModelLineage.model_validate(
             {
                 "model_id": model_id,
-                "ancestors": parent_lineage(manifest, model_id, recursive=recursive),
-                "descendants": child_lineage(manifest, model_id, recursive=recursive),
+                "ancestors": parent_lineage(model_id, recursive=recursive),
+                "descendants": child_lineage(model_id, recursive=recursive),
             }
         ).model_dump_json()
 
@@ -251,7 +251,7 @@ def create_dbt_cli_tool_definitions(config: DbtCliConfig) -> list[ToolDefinition
             fn=get_model_lineage,
             description=get_prompt("dbt_cli/get_lineage"),
             annotations=create_tool_annotations(
-                title="dbt get_lineage",
+                title="dbt get_model_lineage",
                 read_only_hint=True,
                 destructive_hint=False,
                 idempotent_hint=True,

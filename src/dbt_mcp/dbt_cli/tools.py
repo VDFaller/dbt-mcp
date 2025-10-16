@@ -100,6 +100,41 @@ def create_dbt_cli_tool_definitions(config: DbtCliConfig) -> list[ToolDefinition
             vars=vars,
         )
 
+    def _get_manifest() -> str:
+        _run_dbt_command(["parse"])
+        cwd_path = config.project_dir if os.path.isabs(config.project_dir) else None
+        manifest_path = os.path.join(cwd_path or ".", "target", "manifest.json")
+        with open(manifest_path, "r") as f:
+            return json.loads(f.read())
+
+    def get_parent_lineage(model_id: str, recursive: bool = False) -> str:
+        manifest = _get_manifest()
+        parent_map = manifest.get("parent_map", {})
+        if not recursive:
+            return json.dumps(parent_map.get(model_id, []))
+        # If recursive is True, we need to get all ancestors
+        ancestors = set()
+        to_process = parent_map.get(model_id, [])
+        while to_process:
+            current = to_process.pop(0)
+            ancestors.add(current)
+            to_process.extend(parent_map.get(current, []))
+        return json.dumps(list(ancestors))
+
+    def get_child_lineage(model_id: str, recursive: bool = False) -> str:
+        manifest = _get_manifest()
+        child_map = manifest.get("child_map", {})
+        if not recursive:
+            return json.dumps(child_map.get(model_id, []))
+        # If recursive is True, we need to get all descendants
+        descendants = set()
+        to_process = child_map.get(model_id, [])
+        while to_process:
+            current = to_process.pop(0)
+            descendants.add(current)
+            to_process.extend(child_map.get(current, []))
+        return json.dumps(list(descendants))
+
     def compile() -> str:
         return _run_dbt_command(["compile"])
 

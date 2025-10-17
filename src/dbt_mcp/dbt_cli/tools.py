@@ -14,7 +14,6 @@ from dbt_mcp.tools.definitions import ToolDefinition
 from dbt_mcp.tools.register import register_tools
 from dbt_mcp.tools.tool_names import ToolName
 from dbt_mcp.tools.annotations import create_tool_annotations
-from dbt_mcp.dbt_cli.manifest.parser import get_parent_lineage, get_child_lineage
 
 from dbt_mcp.dbt_cli.manifest.lineage_types import ModelLineage
 
@@ -112,22 +111,19 @@ def create_dbt_cli_tool_definitions(config: DbtCliConfig) -> list[ToolDefinition
         with open(manifest_path) as f:
             return json.loads(f.read())
 
-    def parent_lineage(model_id: str, recursive: bool = False) -> str:
+    def get_model_lineage(
+        model_id: str = Field(description="The Model ID for which to get lineage"),
+        recursive: bool = Field(
+            default=False, description="Whether to include recursive lineage"
+        ),
+    ) -> str:
+        # Directly build ModelLineage from the manifest to avoid unnecessary
+        # JSON serialization/deserialization and keep the logic in one place.
         manifest = _get_manifest()
-        return get_parent_lineage(manifest, model_id, recursive=recursive)
-
-    def child_lineage(model_id: str, recursive: bool = False) -> str:
-        manifest = _get_manifest()
-        return get_child_lineage(manifest, model_id, recursive=recursive)
-
-    def get_model_lineage(model_id: str, recursive: bool = False) -> str:
-        return ModelLineage.model_validate(
-            {
-                "model_id": model_id,
-                "ancestors": parent_lineage(model_id, recursive=recursive),
-                "descendants": child_lineage(model_id, recursive=recursive),
-            }
-        ).model_dump_json()
+        ml = ModelLineage.from_manifest(
+            manifest, model_id, recursive=recursive, direction="both"
+        )
+        return ml.model_dump_json()
 
     def compile() -> str:
         return _run_dbt_command(["compile"])
@@ -256,6 +252,7 @@ def create_dbt_cli_tool_definitions(config: DbtCliConfig) -> list[ToolDefinition
                 destructive_hint=False,
                 idempotent_hint=True,
             ),
+            structured_output=True,
         ),
         ToolDefinition(
             fn=parse,

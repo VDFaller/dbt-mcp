@@ -128,5 +128,5 @@ if __name__ == "__main__":
     print(
         ModelLineage.from_manifest(
             manifest, model_id, recursive=True, direction="parents"
-        )
+        ).model_dump()
     )

@@ -88,6 +88,9 @@ tool_policies = {
     ToolName.GET_ALL_MODELS.value: ToolPolicy(
         name=ToolName.GET_ALL_MODELS.value, behavior=ToolBehavior.METADATA
     ),
+    ToolName.GET_ALL_SOURCES.value: ToolPolicy(
+        name=ToolName.GET_ALL_SOURCES.value, behavior=ToolBehavior.METADATA
+    ),
     ToolName.GET_EXPOSURES.value: ToolPolicy(
         name=ToolName.GET_EXPOSURES.value, behavior=ToolBehavior.METADATA
     ),
